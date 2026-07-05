@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>S8 - Gestione Estrazioni Cloud Modulare</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div id="screen-login" class="card">
+        <h1>S8 CLOUD APP</h1>
+        <div id="login-error" class="alert alert-danger hidden">Password errata. Riprova.</div>
+        <div class="form-group">
+            <label for="password">Inserisci la password di accesso</label>
+            <input type="password" id="password" placeholder="••••••••">
+        </div>
+        <button id="btn-login">Accedi</button>
+    </div>
+
+    <div id="screen-main" class="card hidden">
+        <div class="version-badge">Versione: 10.0 Modulare</div>
+        <h1>S8 - Pannello Cloud</h1>
+        
+        <div class="info-box">
+            <p><strong>Ultima Estrazione:</strong> <span id="lbl-ultima-data">Caricamento...</span></p>
+            <p style="font-size: 0.85rem; color: var(--text-light); margin-top: 5px;">
+                Record caricati in memoria: <span id="lbl-totale-record">0</span>
+            </p>
+        </div>
+
+        <div class="limit-container">
+            <label for="txt-limite-record">Estrazioni più recenti da scaricare:</label>
+            <input type="number" id="txt-limite-record" value="1000" min="1" max="9999">
+        </div>
+
+        <div id="box-operativo">
+            <div class="menu-btn" id="btn-vai-inserimento">
+                <span>1 - Inserisci nuova estrazione</span> ➔
+            </div>
+            
+            <div class="file-input-wrapper" style="width: 100%;">
+                <div class="menu-btn">
+                    <span>2 - Importa/Sovrascrivi intero Storico (.txt)</span> ➔
+                </div>
+                <input type="file" id="file-import" accept=".txt">
+            </div>
+
+            <div class="menu-btn" id="btn-vai-filtro">
+                <span>2b - Visualizza storico parziale (Filtro Date)</span> ➔
+            </div>
+            <div class="menu-btn" id="btn-visualizza-completo">
+                <span>3 - Visualizza storico completo</span> ➔
+            </div>
+        </div>
+        
+        <button id="btn-logout" class="btn-secondary" style="margin-top: 30px; background-color: #ffe0b2; color: #e65100;">Esci</button>
+    </div>
+
+    <div id="screen-inserimento" class="card hidden">
+        <h1>Nuova Estrazione</h1>
+        <div id="ins-error" class="alert alert-danger hidden"></div>
+        
+        <div class="form-group">
+            <label for="ins-data">Data Estrazione</label>
+            <input type="date" id="ins-data">
+        </div>
+
+        <div class="form-group">
+            <label>Sestina Numerica (da 1 a 90, numeri unici)</label>
+            <div class="grid-6">
+                <input type="number" id="n1" min="1" max="90">
+                <input type="number" id="n2" min="1" max="90">
+                <input type="number" id="n3" min="1" max="90">
+                <input type="number" id="n4" min="1" max="90">
+                <input type="number" id="n5" min="1" max="90">
+                <input type="number" id="n6" min="1" max="90">
+            </div>
+        </div>
+
+        <div class="grid-2">
+            <div class="form-group">
+                <label for="nj">Numero Jolly (J)</label>
+                <input type="number" id="nj" min="1" max="90">
+            </div>
+            <div class="form-group">
+                <label for="nss">SuperStar (SS)</label>
+                <input type="number" id="nss" min="1" max="90">
+            </div>
+        </div>
+
+        <button id="btn-salva-estrazione">Salva nel Database Cloud</button>
+        <button class="btn-secondary btn-torna-menu">Annulla e Torna Indietro</button>
+    </div>
+
+    <div id="screen-filtro-date" class="card hidden">
+        <h1>Filtra l'Archivio Cloud</h1>
+        <div id="filtro-error" class="alert alert-danger hidden"></div>
+        <p style="font-size: 0.9rem; color: var(--text-light); margin-bottom: 20px;">
+            Scegli il periodo temporale da mostrare a schermo. Il sistema cercherà direttamente nel database online.
+        </p>
+
+        <div class="form-group">
+            <label for="filtro-da">Da Data:</label>
+            <input type="date" id="filtro-da">
+        </div>
+        <div class="form-group">
+            <label for="filtro-a">A Data:</label>
+            <input type="date" id="filtro-a">
+        </div>
+
+        <button id="btn-applica-filtro" style="background-color: var(--primary-color);">Filtra e Visualizza</button>
+        <button class="btn-secondary btn-torna-menu">Torna al Menu</button>
+    </div>
+
+    <div id="screen-visualizza" class="card hidden" style="max-width: 700px;">
+        <h1 id="titolo-visualizzazione">Archivio Estrazioni</h1>
+        
+        <div class="table-container">
+            <table id="tabella-storico">
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Sestina</th>
+                        <th>J</th>
+                        <th>SS</th>
+                    </tr>
+                </thead>
+                <tbody id="corpo-tabella"></tbody>
+            </table>
+        </div>
+
+        <button class="btn-secondary btn-torna-menu" style="margin-top: 15px;">Torna al Menu Principale</button>
+    </div>
+
+    <script type="module">
+        import { mostraSchermata, caricaEVisualizzaStorico } from './js/ui.js';
+        import { checkPassword, logout } from './js/auth.js';
+        import { sincronizzaDalCloud, salvaEstrazione, importaFileSuCloud } from './js/cloud.js';
+
+        // Avvio dell'app e impostazione date di default
+        window.onload = function() {
+            const oggi = new Date().toISOString().split('T')[0];
+            document.getElementById('filtro-a').value = oggi;
+
+            if (localStorage.getItem('s8_logged_in') === 'true') {
+                mostraSchermata('screen-main');
+                sincronizzaDalCloud();
+            } else {
+                mostraSchermata('screen-login');
+            }
+        };
+
+        // Aggancio dei click ai pulsanti dell'interfaccia
+        document.getElementById('btn-login').addEventListener('click', checkPassword);
+        document.getElementById('btn-logout').addEventListener('click', logout);
+        document.getElementById('txt-limite-record').addEventListener('change', sincronizzaDalCloud);
+        document.getElementById('btn-salva-estrazione').addEventListener('click', salvaEstrazione);
+        
+        document.getElementById('file-import').addEventListener('change', function() {
+            importaFileSuCloud(this);
+        });
+
+        document.getElementById('btn-vai-inserimento').addEventListener('click', () => mostraSchermata('screen-inserimento'));
+        document.getElementById('btn-vai-filtro').addEventListener('click', () => {
+            document.getElementById('filtro-error').classList.add('hidden');
+            mostraSchermata('screen-filtro-date');
+        });
+        
+        document.getElementById('btn-visualizza-completo').addEventListener('click', () => caricaEVisualizzaStorico(null, null));
+
+        // Gestione pulsanti di ritorno al menu principale
+        document.querySelectorAll('.btn-torna-menu').forEach(btn => {
+            btn.addEventListener('click', () => mostraSchermata('screen-main'));
+        });
+
+        // Gestione filtro date
+        document.getElementById('btn-applica-filtro').addEventListener('click', () => {
+            const errorDiv = document.getElementById('filtro-error');
+            errorDiv.classList.add('hidden');
+            const strDa = document.getElementById('filtro-da').value;
+            const strA = document.getElementById('filtro-a').value;
+
+            if (!strDa || !strA) {
+                errorDiv.innerText = "Errore: Compila sia la data di inizio che la data di fine.";
+                errorDiv.classList.remove('hidden');
+                return;
+            }
+            if (strDa > strA) {
+                errorDiv.innerText = "Errore Logico: La data iniziale non può essere successiva a quella finale.";
+                errorDiv.classList.remove('hidden');
+                return;
+            }
+            caricaEVisualizzaStorico(strDa, strA);
+        });
+    </script>
+</body>
+</html>
